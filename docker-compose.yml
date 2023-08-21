@@ -1,0 +1,13 @@
+version: '3.7'
+
+services:
+  # Amazon 내부에서 docker-compose 실행용
+  samsung-fire-front:
+    image: 12345.dkr.ecr.ap-northeast-2.amazonaws.com/myapp:${DEPLOY_VERSION}
+    environment:
+      - NODE_ENV=develop
+      - TZ=Asia/Seoul
+    entrypoint: ./docker-entrypoint.sh
+    ports:
+      - "8030:8030" # 외부:내부
+    restart: 'always'

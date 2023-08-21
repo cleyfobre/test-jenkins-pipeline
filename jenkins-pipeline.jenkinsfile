@@ -1,0 +1,69 @@
+pipeline { 
+    agent any 
+    
+    environment {
+        BUILD_NUMBER = "${env.BUILD_NUMBER}"
+    }
+    
+    tools {
+        nodejs "node 16.20.0" 
+        'org.jenkinsci.plugins.docker.commons.tools.DockerTool' 'docker-latest'
+    }
+    
+    stages {
+        stage('get SCM') {
+            steps {
+                sh 'ls -al'
+                sh 'rm -rf *'
+                git branch: '{develop or master whatever}', credentialsId: '{jenkins credentials id}', url: '{repository url such as http://gitlab.hello.world/test.git}'
+            }
+        }
+           
+        stage('yarn build') {
+            steps {
+                sh "node -v && yarn"
+                sh "sudo docker version"
+            }
+        }
+         
+        stage('Build image') {
+            steps {
+                sh "ls -al"
+                sh "sudo docker image prune --filter until=12h -f"
+                sh "sudo docker build --no-cache --build-arg BUILD=dev -t myapp:${env.BUILD_NUMBER} ."
+                sh "sudo docker tag myapp:${env.BUILD_NUMBER} myapp:latest"
+            }
+        }
+        
+        stage('Deploy ECR') {
+            steps {
+                sh 'rm  ~/.dockercfg || true'
+                sh 'rm ~/.docker/config.json || true'
+                script {
+                    docker.withRegistry('https://12345.dkr.ecr.ap-northeast-2.amazonaws.com', 'ecr:ap-northeast-2:jenkinsCredentials') {
+                        docker.image("myapp:${env.BUILD_NUMBER}").push()
+                        docker.image("myapp:latest").push()
+                    }    
+                }
+            }
+        }
+        
+        stage('send compose and env') {
+            steps {
+                script {
+                    command = 'sudo ssh -i /home/ubuntu/my.pem ubuntu@12.34.56.78 -T " echo \'DEPLOY_VERSION='+ "${env.BUILD_NUMBER}\'" + '|cat > /home/ubuntu/myapp/.env"'
+                    command2 = 'sudo ssh -i /home/ubuntu/my.pem ubuntu@12.34.56.78 -T " echo \'DEPLOY_VERSION='+ "${env.BUILD_NUMBER}\'" + '|cat > /home/ubuntu/.env"'
+                }
+                sh "${command}"
+                sh "${command2}"
+                //sh 'sudo ssh -i /home/ubuntu/my.pem ubuntu@12.34.56.78 -T " echo \'DEPLOY_VERSION=${env.BUILD_NUMBER}\' |cat > /home/ubuntu/myapp/.env"'
+                sh 'sudo scp -i /home/ubuntu/my.pem docker-compose.yml ubuntu@12.34.56.78:/home/ubuntu/myapp'
+            }
+        }
+        stage('excute docker-compose') {
+            steps {
+                sh 'sudo ssh -i /home/ubuntu/my.pem ubuntu@12.34.56.78 -T " aws ecr get-login-password --region ap-northeast-2 | sudo docker login --username AWS --password-stdin 12345.dkr.ecr.ap-northeast-2.amazonaws.com/myapp | sudo docker-compose -f myapp/docker-compose.yml pull | sudo docker-compose -f myapp/docker-compose.yml up -d"'
+            }
+        }
+    }
+}
