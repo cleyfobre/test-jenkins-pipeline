@@ -15,7 +15,7 @@ pipeline {
             steps {
                 sh 'ls -al'
                 sh 'rm -rf *'
-                git branch: '{develop or master whatever}', credentialsId: '{jenkins credentials id}', url: '{repository url such as http://gitlab.hello.world/test.git}'
+                git branch: 'develop', credentialsId: 'tommy.kim', url: 'http://gitlab.hello.world/test.git'
             }
         }
            
